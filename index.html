@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><title>Family Tree View-Only</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f0f0f0;}
+svg{width:100vw;height:100vh;background:#fafafa;}
+.person-box{fill:white;stroke-width:2;rx:8;ry:8;}
+.male{stroke:#2b6cb0;}
+.female{stroke:#c53030;}
+.unknown{stroke:#555;}
+.person-text{font-size:13px;text-anchor:middle;dominant-baseline:middle;pointer-events:none;}
+.link{stroke:#666;stroke-width:2;fill:none;}
+#bioTooltip{position:absolute;background:#fff;border:1px solid #ccc;padding:10px;max-width:250px;display:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
+#bioTooltip img{max-width:100%;display:block;margin-bottom:6px;}
+</style></head><body>
+<svg id="tree"></svg>
+<div id="bioTooltip"></div>
+<script>
+const people = [
+  {
+    "id": "g1",
+    "name": "Khalil Jabbour",
+    "gender": "male",
+    "parents": [],
+    "partners": [
+      "g2"
+    ],
+    "children": [
+      "p1"
+    ],
+    "bio": "Jack of all trades and was also a shoemaker.",
+    "images": [],
+    "x": 380.5,
+    "y": 23
+  },
+  {
+    "id": "g2",
+    "name": "Adel",
+    "gender": "female",
+    "parents": [],
+    "partners": [
+      "g1"
+    ],
+    "children": [
+      "p1"
+    ],
+    "bio": "House wife.",
+    "images": [],
+    "x": 520.5,
+    "y": 23
+  },
+  {
+    "id": "p1",
+    "name": "Lauronce",
+    "gender": "female",
+    "parents": [
+      "g1",
+      "g2"
+    ],
+    "partners": [],
+    "children": [
+      "p1768250086042",
+      "p1768250124100"
+    ],
+    "bio": "Became a dress maker.",
+    "images": [
+      "images/Lauronce.jpg"
+    ],
+    "x": 449.5,
+    "y": 125
+  },
+  {
+    "id": "p1768249582733",
+    "name": "Gergus Khachan",
+    "gender": "male",
+    "parents": [],
+    "partners": [],
+    "children": [
+      "p1768249666126"
+    ],
+    "bio": "Was a school teacher.",
+    "images": [
+      "images/Gergus_Khachan.jpg"
+    ],
+    "x": 700.5,
+    "y": 22
+  },
+  {
+    "id": "p1768249616045",
+    "name": "Therese ",
+    "gender": "female",
+    "parents": [],
+    "partners": [],
+    "children": [
+      "p1768249666126"
+    ],
+    "bio": "Was a school teacher in Haifa, Israel.",
+    "images": [
+      "images/Therese_Khachan.jpg"
+    ],
+    "x": 832.5,
+    "y": 22
+  },
+  {
+    "id": "p1768249666126",
+    "name": "Simon",
+    "gender": "male",
+    "parents": [
+      "p1768249582733",
+      "p1768249616045"
+    ],
+    "partners": [],
+    "children": [
+      "p1768250086042",
+      "p1768250124100"
+    ],
+    "bio": "Left school early. Became a motor mechanic. Moved to Australia in 1963.",
+    "images": [
+      "images/simon.png"
+    ],
+    "x": 765.5,
+    "y": 119
+  },
+  {
+    "id": "p1768250086042",
+    "name": "Joseph",
+    "gender": "male",
+    "parents": [
+      "p1",
+      "p1768249666126"
+    ],
+    "partners": [],
+    "children": [],
+    "bio": "Became a physicist.",
+    "images": [
+      "images/Joseph.jpg"
+    ],
+    "x": 500.5,
+    "y": 209
+  },
+  {
+    "id": "p1768250124100",
+    "name": "Noha",
+    "gender": "female",
+    "parents": [
+      "p1",
+      "p1768249666126"
+    ],
+    "partners": [],
+    "children": [],
+    "bio": "Became a civil engineer.",
+    "images": [
+      "images/Noha.jpg"
+    ],
+    "x": 690.5,
+    "y": 211
+  }
+];
+const personMap = Object.fromEntries(people.map(p=>[p.id,p]));
+const svg=document.getElementById('tree');
+const bioTooltip=document.getElementById('bioTooltip');
+const BOX_WIDTH=120,BOX_HEIGHT=40,H_SPACING=50,V_SPACING=120;
+const positions={};
+function getGeneration(id,cache={}){ if(cache[id]!==undefined)return cache[id]; const p=personMap[id]; if(!p.parents.length){cache[id]=0;return 0;} cache[id]=Math.max(...p.parents.map(pid=>getGeneration(pid,cache)))+1; return cache[id]; }
+function computePositions(){ const gens={}; people.forEach(p=>{ const g=getGeneration(p.id); (gens[g]||(gens[g]=[])).push(p.id); }); Object.keys(gens).forEach(gen=>{ const ids=gens[gen]; const totalWidth=ids.length*BOX_WIDTH + (ids.length-1)*H_SPACING; let startX=(window.innerWidth-totalWidth)/2; ids.forEach((id,i)=>{ positions[id]={x:startX+i*(BOX_WIDTH+H_SPACING),y:gen*V_SPACING+40}; }); }); }
+function drawLinks(){ people.forEach(child=>{ if(!child.parents.length)return; const childPos=positions[child.id]; const parentPos=child.parents.map(pid=>positions[pid]); const midY=Math.min(...parentPos.map(p=>p.y+BOX_HEIGHT))+20; const minX=Math.min(...parentPos.map(p=>p.x+BOX_WIDTH/2)); const maxX=Math.max(...parentPos.map(p=>p.x+BOX_WIDTH/2)); const midX=(minX+maxX)/2; function line(x1,y1,x2,y2){ const l=document.createElementNS("http://www.w3.org/2000/svg","line"); l.setAttribute("x1",x1); l.setAttribute("y1",y1); l.setAttribute("x2",x2); l.setAttribute("y2",y2); l.setAttribute("class","link"); svg.appendChild(l); } line(minX,midY,maxX,midY); parentPos.forEach(pp=>line(pp.x+BOX_WIDTH/2,pp.y+BOX_HEIGHT,pp.x+BOX_WIDTH/2,midY)); line(midX,midY,childPos.x+BOX_WIDTH/2,childPos.y); }); }
+function renderTree(){ svg.innerHTML=""; computePositions(); drawLinks(); people.forEach(p=>{ const pos=positions[p.id]; const g=document.createElementNS("http://www.w3.org/2000/svg","g"); const rect=document.createElementNS("http://www.w3.org/2000/svg","rect"); rect.setAttribute("x",pos.x); rect.setAttribute("y",pos.y); rect.setAttribute("width",BOX_WIDTH); rect.setAttribute("height",BOX_HEIGHT); rect.setAttribute("class","person-box "+p.gender); const text=document.createElementNS("http://www.w3.org/2000/svg","text"); text.setAttribute("x",pos.x+BOX_WIDTH/2); text.setAttribute("y",pos.y+BOX_HEIGHT/2); text.setAttribute("class","person-text"); text.textContent=p.name; g.appendChild(rect); g.appendChild(text); g.addEventListener("mousemove",e=>{ if(p.images.length||p.bio){ bioTooltip.innerHTML=`<strong>${p.name}</strong><br>${p.images.map(i=>`<img src="${i}">`).join("")}${p.bio}`; bioTooltip.style.left=(e.clientX+15)+"px"; bioTooltip.style.top=(e.clientY+15)+"px"; bioTooltip.style.display="block"; } }); g.addEventListener("mouseleave",()=>bioTooltip.style.display="none"); svg.appendChild(g); }); }
+renderTree();
+</script>
+</body></html>
