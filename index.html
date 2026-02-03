@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Family Tree View-Only</title>
+<style>
+body { margin:0; font-family:Arial,sans-serif; background:#f0f0f0; }
+svg { width:100vw; height:100vh; background:#fafafa; }
+.person-box { fill:white; stroke-width:2; rx:10; ry:10; cursor:pointer; }
+.male { stroke:#2b6cb0; }
+.female { stroke:#c53030; }
+.unknown { stroke:#555; }
+.person-text { font-size:14px; text-anchor:middle; dominant-baseline:middle; pointer-events:none; font-weight:bold; }
+.person-thumbnail { pointer-events:none; }
+.person-bio-text { font-size:14px; text-anchor:middle; pointer-events:none; fill:#000; }
+.link { stroke:#666; stroke-width:2; fill:none; }
+#bioTooltip { position:absolute; background:#fff; border:1px solid #ccc; padding:10px; max-width:250px; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.2); z-index:1000; }
+#bioTooltip img { max-width:100%; max-height:150px; width:auto; height:auto; display:block; margin-bottom:6px; object-fit:contain; }
+#profileModal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:none; z-index:2000; overflow-y:auto; }
+#profileModal .modal-content { background:#fff; max-width:1200px; margin:50px auto; padding:20px; border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+#profileModal .header { border-bottom:1px solid #a2a9b1; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; }
+#profileModal .header h1 { margin:0; font-size:28px; font-family:'Linux Libertine',Georgia,Times,serif; }
+#profileModal .close-btn { background:#e9ecef; border:1px solid #a2a9b1; padding:8px 16px; cursor:pointer; border-radius:4px; }
+#profileModal .close-btn:hover { background:#dee2e6; }
+#profileModal #profileContent {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+}
+
+#profileModal .text-column {
+  grid-column: 1 / 2;
+}
+
+#profileModal .image-column {
+  grid-column: 2 / 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#profileModal .wiki-image {
+  float: none;
+  max-width: 100%;
+}
+@media (max-width: 800px) {
+  #profileModal #profileContent {
+    grid-template-columns: 1fr;
+  }
+  #profileModal .image-column {
+    order: -1;
+  }
+}
+
+#profileModal .wiki-image img { width:100%; display:block; }
+#profileModal .wiki-image-caption { padding:5px; font-size:13px; text-align:left; }
+#profileModal .wiki-image.small { max-width:120px; }
+#profileModal .wiki-image.medium { max-width:200px; }
+#profileModal .wiki-image.large { max-width:300px; }
+#profileModal #profileContent { font-family:sans-serif; font-size:14px; line-height:1.6; }
+#profileModal #profileContent a { color:#0645ad; text-decoration:underline; cursor:pointer; }
+#profileModal #profileContent a:hover { color:#0b0080; }
+#profileModal .wiki-image img {
+  cursor: zoom-in;
+}
+
+</style>
+</head>
+<body>
+<div id="imageLightbox" style="
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.85);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:3000;
+">
+  <img id="lightboxImg" style="
+    max-width:95%;
+    max-height:95%;
+    box-shadow:0 0 20px #000;
+    background:#fff;
+  ">
+</div>
+
+<svg id="tree"></svg>
+<div id="bioTooltip"></div>
+<div id="profileModal">
+  <div class="modal-content">
+    <div class="header">
+      <h1 id="modalTitle">Person Profile</h1>
+      <button class="close-btn" onclick="closeModal()">Close</button>
+    </div>
+    <div id="profileContent"></div>
+  </div>
+</div>
+<script>
+const data = {
+  "people": [
+    {
+      "id": "g1",
+      "name": "Joseph Khachan",
+      "gender": "male",
+      "parents": [],
+      "partners": [],
+      "children": [],
+      "bio": "1961 - ",
+      "images": [
+        "images/image_0.jpeg"
+      ],
+      "profileContent": "<div class=\"text-column\" contenteditable=\"true\"><b>Early life</b><p>Joseph Khachan was born on 1 July 1961 in Beirut Lebanon to Simon and Lauronce (nee Jabbour) Khachan. His official date of birth is 2 February 1962 due to an error when registering his birth seven months later. He was also erroneously registered with the name of Youssef, which he has never used.&nbsp; His only sibling is his sister Noha. His father is from Ebrine (or Aabrine) (Arabic:&nbsp;<span class=\"Yjhzub\" data-processed=\"true\">عبرين</span>),&nbsp; a village in the Batroun District of North Lebanon. His mother is from Ain el Jdideh&nbsp;(Arabic:&nbsp;عين الجديدة), a village located 19 kilometers from Beirut, in the governorate of mount Lebanon, in the Aley district, with an elevation of 930 m above sea level. His parents were religious. His parents were Christian. His father being Maronite and his mother Greek Orthodox.&nbsp;</p><p><br></p></div><div class=\"image-column\" contenteditable=\"false\"><div class=\"wiki-image selected medium\" contenteditable=\"false\"><img src=\"images/image_1.png\" alt=\"Joe at age 13. Image was taken in Lebanon.\"><div class=\"wiki-image-caption\" contenteditable=\"true\" style=\"cursor: text;\">Joe at age 13. Image was taken in Lebanon.</div></div></div>"
+    }
+  ],
+  "positions": {
+    "g1": {
+      "x": 759.5,
+      "y": 296
+    },
+    "p1769987666296": {
+      "x": 811.5,
+      "y": 294
+    }
+  },
+  "pan": {
+    "x": -69,
+    "y": 45
+  }
+};
+const people = data.people || data;
+const personMap = Object.fromEntries(people.map(p => [p.id,p]));
+const savedPositions = data.positions || {};
+let panX = (data.pan && data.pan.x) || 0;
+let panY = (data.pan && data.pan.y) || 0;
+let isPanning = false;
+let panStartX = 0;
+let panStartY = 0;
+const svg = document.getElementById('tree');
+const bioTooltip = document.getElementById('bioTooltip');
+const profileModal = document.getElementById('profileModal');
+const modalTitle = document.getElementById('modalTitle');
+const profileContent = document.getElementById('profileContent');
+const BOX_WIDTH=120, BOX_HEIGHT=180, H_SPACING=50, V_SPACING=180;
+const THUMBNAIL_SIZE=100;
+const positions={};
+
+function wrapText(text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = '';
+  
+  words.forEach(word => {
+    const testLine = currentLine ? currentLine + ' ' + word : word;
+    if (testLine.length * 10 > maxWidth) {
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  });
+  
+  if (currentLine) lines.push(currentLine);
+  return lines;
+}
+
+function closeModal() {
+  profileModal.style.display = 'none';
+}
+
+function showProfile(person) {
+  modalTitle.textContent = person.name;
+  if(person.profileContent && person.profileContent.trim()) {
+    profileContent.innerHTML = person.profileContent;
+    profileContent.querySelectorAll('[contenteditable]').forEach(el => {
+      el.removeAttribute('contenteditable');
+    });
+  } else {
+    let html = '<p><strong>Bio:</strong> ' + (person.bio || 'No bio available.') + '</p>';
+    if(person.images && person.images.length > 0) {
+      html += '<div style="margin-top:20px;">';
+      person.images.forEach(imgSrc => {
+        html += `<img src="${imgSrc}" style="max-width:300px; margin:10px; border:1px solid #ccc;">`;
+      });
+      html += '</div>';
+    }
+    profileContent.innerHTML = html;
+  }
+  profileModal.style.display = 'block';
+}
+const imageLightbox = document.getElementById('imageLightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+
+document.addEventListener('click', e => {
+  const img = e.target.closest('#profileModal .wiki-image img');
+  if (!img) return;
+
+  e.stopPropagation();
+  lightboxImg.src = img.src;
+  imageLightbox.style.display = 'flex';
+});
+
+imageLightbox.addEventListener('click', () => {
+  imageLightbox.style.display = 'none';
+  lightboxImg.src = '';
+});
+
+
+profileModal.addEventListener('click', (e) => {
+  if(e.target === profileModal) closeModal();
+});
+
+function getGeneration(id,cache={}) {
+  if(cache[id]!==undefined) return cache[id];
+  const p = personMap[id];
+  if(!p.parents.length){ cache[id]=0; return 0; }
+  cache[id] = Math.max(...p.parents.map(pid => getGeneration(pid,cache)))+1;
+  return cache[id];
+}
+
+function computePositions() {
+  const gens={};
+  people.forEach(p => {
+    if(savedPositions[p.id]) {
+      positions[p.id] = savedPositions[p.id];
+    } else if(!positions[p.id]) {
+      const g = getGeneration(p.id);
+      (gens[g]=gens[g]||[]).push(p.id);
+    }
+  });
+  Object.keys(gens).forEach(gen=>{
+    const ids = gens[gen];
+    const totalWidth = ids.length*BOX_WIDTH + (ids.length-1)*H_SPACING;
+    const startX = (window.innerWidth - totalWidth)/2;
+    ids.forEach((id,i)=>{
+      positions[id]={ x: startX + i*(BOX_WIDTH+H_SPACING), y: gen*V_SPACING + 40 };
+    });
+  });
+}
+
+function drawLinks() {
+  function line(x1,y1,x2,y2){ 
+    const l=document.createElementNS("http://www.w3.org/2000/svg","line"); 
+    l.setAttribute("x1",x1 + panX); 
+    l.setAttribute("y1",y1 + panY); 
+    l.setAttribute("x2",x2 + panX); 
+    l.setAttribute("y2",y2 + panY); 
+    l.setAttribute("class","link"); 
+    svg.appendChild(l);
+  }
+  
+  const parentSetMap = new Map();
+  
+  people.forEach(child => {
+    if (!child.parents.length) return;
+    
+    const parentKey = [...child.parents].sort().join(',');
+    
+    if (!parentSetMap.has(parentKey)) {
+      parentSetMap.set(parentKey, []);
+    }
+    parentSetMap.get(parentKey).push(child.id);
+  });
+  
+  parentSetMap.forEach((childrenIds, parentKey) => {
+    const parentIds = parentKey.split(',');
+    const parents = parentIds.map(pid => positions[pid]);
+    const children = childrenIds.map(cid => positions[cid]);
+    
+    const parentMinX = Math.min(...parents.map(p => p.x + BOX_WIDTH/2));
+    const parentMaxX = Math.max(...parents.map(p => p.x + BOX_WIDTH/2));
+    const parentY = Math.min(...parents.map(p => p.y + BOX_HEIGHT));
+    const parentMidY = parentY + 20;
+    
+    if (parents.length > 1) {
+      line(parentMinX, parentMidY, parentMaxX, parentMidY);
+    }
+    
+    parents.forEach(p => {
+      line(p.x + BOX_WIDTH/2, p.y + BOX_HEIGHT, p.x + BOX_WIDTH/2, parentMidY);
+    });
+    
+    const parentCenterX = (parentMinX + parentMaxX) / 2;
+    
+    const childMinX = Math.min(...children.map(c => c.x + BOX_WIDTH/2));
+    const childMaxX = Math.max(...children.map(c => c.x + BOX_WIDTH/2));
+    const childY = Math.min(...children.map(c => c.y));
+    const childMidY = childY - 20;
+    
+    if (children.length > 1) {
+      line(childMinX, childMidY, childMaxX, childMidY);
+    }
+    
+    children.forEach(c => {
+      line(c.x + BOX_WIDTH/2, c.y, c.x + BOX_WIDTH/2, childMidY);
+    });
+    
+    const childCenterX = (childMinX + childMaxX) / 2;
+    line(parentCenterX, parentMidY, childCenterX, childMidY);
+  });
+}
+
+function showProfileTooltip(person, e){
+  let html = '<strong>'+person.name+'</strong><br>';
+  html += person.images.map(i=>`<img src="${i}">`).join('');
+  if(person.bio) html += person.bio;
+  bioTooltip.innerHTML = html;
+  bioTooltip.style.display='block';
+}
+
+function renderTree() {
+  svg.innerHTML='';
+  computePositions();
+  drawLinks();
+  people.forEach(p=>{
+    const pos = positions[p.id];
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    
+   	const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+	rect.setAttribute('x',pos.x + panX); 
+	rect.setAttribute('y',pos.y + panY);
+	rect.setAttribute('width',BOX_WIDTH); 
+	rect.setAttribute('height',BOX_HEIGHT);
+	rect.setAttribute('rx', 10);
+	rect.setAttribute('ry', 10);
+	rect.setAttribute('class','person-box '+p.gender);
+	g.appendChild(rect);
+    
+    let yOffset = 15;
+    if(p.images && p.images.length > 0) {
+      const imgSrc = p.images[0];
+      if(imgSrc) {
+        const thumbnail = document.createElementNS('http://www.w3.org/2000/svg','image');
+        thumbnail.setAttributeNS('http://www.w3.org/1999/xlink', 'href', imgSrc);
+        thumbnail.setAttribute('x', pos.x + (BOX_WIDTH - THUMBNAIL_SIZE) / 2 + panX);
+        thumbnail.setAttribute('y', pos.y + 10 + panY);
+        thumbnail.setAttribute('width', THUMBNAIL_SIZE);
+        thumbnail.setAttribute('height', THUMBNAIL_SIZE);
+        thumbnail.setAttribute('class', 'person-thumbnail');
+        thumbnail.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+        thumbnail.style.clipPath = 'circle(50px at center)';
+        g.appendChild(thumbnail);
+        yOffset = THUMBNAIL_SIZE + 20;
+      }
+    }
+    
+// Add name (wrapped)
+const nameLines = wrapText(p.name, BOX_WIDTH - 5);
+const maxNameLines = 3; // Limit name to 2 lines
+nameLines.slice(0, maxNameLines).forEach((line, idx) => {
+  const nameText = document.createElementNS('http://www.w3.org/2000/svg','text');
+  nameText.setAttribute('x', pos.x + BOX_WIDTH/2 + panX);
+  nameText.setAttribute('y', pos.y + yOffset + (idx * 14) + panY);
+  nameText.setAttribute('class', 'person-text');
+  nameText.textContent = line;
+  g.appendChild(nameText);
+});
+
+// Adjust yOffset for bio text to account for wrapped name
+const nameHeight = Math.min(nameLines.length, maxNameLines) * 14;
+    
+// Add bio text (wrapped)
+if(p.bio) {
+  const bioLines = wrapText(p.bio, BOX_WIDTH);
+  const maxLines = 3; // You might want to reduce this from 3 to 2
+  bioLines.slice(0, maxLines).forEach((line, idx) => {
+    const bioText = document.createElementNS('http://www.w3.org/2000/svg','text');
+    bioText.setAttribute('x', pos.x + BOX_WIDTH/2 + panX);
+    bioText.setAttribute('y', pos.y + yOffset + nameHeight + 6 + (idx * 12) + panY);
+    bioText.setAttribute('class', 'person-bio-text');
+    bioText.textContent = line;
+    g.appendChild(bioText);
+  });
+}
+    
+    g.addEventListener('click', () => {
+      showProfile(p);
+    });
+
+    svg.appendChild(g);
+  });
+}
+
+function updatePositions() {
+  svg.innerHTML='';
+  drawLinks();
+  people.forEach(p=>{
+    const pos = positions[p.id];
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    
+	const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+	rect.setAttribute('x',pos.x + panX); 
+	rect.setAttribute('y',pos.y + panY);
+	rect.setAttribute('width',BOX_WIDTH); 
+	rect.setAttribute('height',BOX_HEIGHT);
+	rect.setAttribute('rx', 10);
+	rect.setAttribute('ry', 10);
+	rect.setAttribute('class','person-box '+p.gender);
+	g.appendChild(rect);
+    
+    let yOffset = 15;
+    if(p.images && p.images.length > 0) {
+      const imgSrc = p.images[0];
+      if(imgSrc) {
+        const thumbnail = document.createElementNS('http://www.w3.org/2000/svg','image');
+        thumbnail.setAttributeNS('http://www.w3.org/1999/xlink', 'href', imgSrc);
+        thumbnail.setAttribute('x', pos.x + (BOX_WIDTH - THUMBNAIL_SIZE) / 2 + panX);
+        thumbnail.setAttribute('y', pos.y + 10 + panY);
+        thumbnail.setAttribute('width', THUMBNAIL_SIZE);
+        thumbnail.setAttribute('height', THUMBNAIL_SIZE);
+        thumbnail.setAttribute('class', 'person-thumbnail');
+        thumbnail.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+        thumbnail.style.clipPath = 'circle(50px at center)';
+        g.appendChild(thumbnail);
+        yOffset = THUMBNAIL_SIZE + 20;
+      }
+    }
+    
+ // Add name (wrapped)
+const nameLines = wrapText(p.name, BOX_WIDTH - 5);
+const maxNameLines = 3; // Limit name to 2 lines
+nameLines.slice(0, maxNameLines).forEach((line, idx) => {
+  const nameText = document.createElementNS('http://www.w3.org/2000/svg','text');
+  nameText.setAttribute('x', pos.x + BOX_WIDTH/2 + panX);
+  nameText.setAttribute('y', pos.y + yOffset + (idx * 14) + panY);
+  nameText.setAttribute('class', 'person-text');
+  nameText.textContent = line;
+  g.appendChild(nameText);
+});
+
+// Adjust yOffset for bio text to account for wrapped name
+const nameHeight = Math.min(nameLines.length, maxNameLines) * 14;
+    
+// Add bio text (wrapped)
+if(p.bio) {
+  const bioLines = wrapText(p.bio, BOX_WIDTH);
+  const maxLines = 3; // You might want to reduce this from 3 to 2
+  bioLines.slice(0, maxLines).forEach((line, idx) => {
+    const bioText = document.createElementNS('http://www.w3.org/2000/svg','text');
+    bioText.setAttribute('x', pos.x + BOX_WIDTH/2 + panX);
+    bioText.setAttribute('y', pos.y + yOffset + nameHeight + 6 + (idx * 12) + panY);
+    bioText.setAttribute('class', 'person-bio-text');
+    bioText.textContent = line;
+    g.appendChild(bioText);
+  });
+}
+    
+    g.addEventListener('click', () => {
+      showProfile(p);
+    });
+ 
+    svg.appendChild(g);
+  });
+}
+
+svg.addEventListener('mousedown', (e) => {
+  if(e.target === svg) {
+    isPanning = true;
+    panStartX = e.clientX - panX;
+    panStartY = e.clientY - panY;
+    svg.style.cursor = 'grabbing';
+  }
+});
+
+svg.addEventListener('mousemove', (e) => {
+  if(isPanning) {
+    e.preventDefault();
+    panX = e.clientX - panStartX;
+    panY = e.clientY - panStartY;
+    updatePositions();
+  }
+});
+
+svg.addEventListener('mouseup', () => {
+  isPanning = false;
+  svg.style.cursor = 'grab';
+});
+
+
+window.onload = renderTree;
+window.addEventListener('resize', renderTree);
+</script>
+</body>
+</html>
